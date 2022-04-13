@@ -6,17 +6,6 @@ from os.path import isfile, join
 from enum import Enum
 import re
 
-
-class GraphDirectory(Enum):
-    # GRAPH_ROOT = './'
-    GRAPH_ROOT = '../example_graph/'
-    JOURNALS_DIRECTORY = 'journal'
-    PAGES_DIRECTORY = 'pages'
-    ASSETS = 'assets'
-    META = 'logseq'
-    DELETED_FILES = '.trash'  # this is Obsidian style
-
-
 PAGE_META_DEFAULT = ['title', 'alias']
 PAGE_FILE_EXTENSION = '.' + 'md'  # this is the only format allowed so far
 
