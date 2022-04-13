@@ -40,38 +40,39 @@ class Page:
        It can contain multiple blocks at the upper level,
        and saved as a seperate file in the system.
     """
-    def __init__(self, title, block_list, metadata={}, file_path=None):
+    def __init__(self, title, children_blocks, properties={}, file_path=None):
         self.title = title
-        self.block_list = block_list
-        self.metadata = metadata
+        self.children_blocks = children_blocks
+        self.properties = properties
         self.file_path = file_path
+        # metadata: create-time, create-email, edit-time, edit-email
 
     def __str__(self):
-        return f'{self.title}, {self.metadata}: {self.block_list}'
+        return f'{self.title}, {self.properties}: {self.children_blocks}'
 
     @classmethod
     def read_from(cls, file_path):
         with open(file_path, 'r') as f:
             file_content = f.read()
 
-        metadata = Page.retrieve_metadata(file_content)
-        title = metadata.get(
+        properties = Page.retrieve_properties(file_content)
+        title = properties.get(
             'title',
             file_path.rsplit('/', maxsplit=1)[-1].strip(PAGE_FILE_EXTENSION))
 
         return cls(title=title,
-                   block_list=None,
-                   metadata=metadata,
+                   children_blocks=None,
+                   properties=properties,
                    file_path=file_path)
 
     def reread(self):
         new_page = Page.read_from(self.file_path)
         self.title = new_page.title
-        self.block_list = new_page.block_list
-        self.metadata = new_page.metadata
+        self.children_blocks = new_page.children_blocks
+        self.properties = new_page.properties
 
     @staticmethod
-    def retrieve_metadata(text: str) -> dict:
+    def retrieve_properties(text: str) -> dict:
         parsed_properties = []
 
         # front matter: Start of the page, enclosed by two '---'s
@@ -88,7 +89,6 @@ class Page:
         parsed_inline = re.findall(regex_inline_syntax, text)
         if parsed_inline:
             parsed_properties += parsed_inline
-
 
         property_dict = {}
         if parsed_properties:
@@ -137,10 +137,8 @@ class Page:
             else:
                 pass
 
-
-
     @staticmethod
-    def get_block_list(text: str) -> list:
+    def get_children_blocks(text: str) -> list:
         # remove front matter
         regex_front_matter = r'\A-{3}\n(.*\n)+-{3}\n+'
         text_main = re.sub(regex_front_matter, '', text)
@@ -158,11 +156,14 @@ class Page:
             print(last_match)
             matched_marker = text_main[last_match.start():last_match.end()]
             level = last_match.end() - last_match.start() - 1
-            print(level); print(matched_marker)
+            print(level)
+            print(matched_marker)
             last_match = next(matched_all)
 
-
     def get_related_pages(self):
+        pass
+
+    def combine_page_files():
         pass
 
     def write_to(self, filepath):
@@ -173,19 +174,17 @@ class Page:
     def rename_as(self, filepath):
         pass
 
-    def combine_page_files():
-        pass
-
 
 class Block:
     """Block is the smallest addressable (thus linkable) unit.
-       It can contain a child block.
+       Each block can contain a child block.
     """
-    def __init__(self, content, metadata: {}):
+    def __init__(self, content, properties: {}):
         self.content = content
+        # metadata: uid, edit-time, edit-mail
 
     @property
-    def subblock(self):
+    def child_block(self):
         # iterative
         pass
 
