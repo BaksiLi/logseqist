@@ -10,15 +10,11 @@ LOGSEQ_FILE_FORMAT = 'md'  # this is the only format allowed so far
 PAGE_FILE_EXTENSION = '.' + LOGSEQ_FILE_FORMAT
 
 
-class BlockToken(NamedTuple):
-    type_: str
-    value: str or (str, str) or list[(str, str)]
-    indent_level: int
-    span: Tuple[int, int]
-    # span: tuple[int, int]  # python 3.9
-
-
 class Graph:
+    """Graph is a collection of pages.
+
+    It roughly corresponds to the Logseq database.
+    """
     def __init__(self):
         pass
 
@@ -105,7 +101,6 @@ class Page:
     def get_properties(text):
         pass
 
-
     @staticmethod
     def tokenizer(text: str) -> Tuple[BlockToken]:
         regex_block_specification = [
@@ -113,9 +108,9 @@ class Page:
             ('INDENT', r'\t'),
             ('LINE_BREAK', r'\n'),
             ('PROPERTY',
-             r'(- )*(?P<property_name>\w+):: (?P<property_value>.*)'),
+             r'(- |( {2})+)(?P<property_name>\w+):: (?P<property_value>.*)'),
             ('LIST', r'(- ?)(?P<list_line_value>.*)'),  # use (?:...)?
-            ('CONTENT_LINE', r'\s? ?(?P<content_line_value>.*)'),
+            ('CONTENT_LINE', r'[\t ]+(?P<content_line_value>.*)'),
         ]
         regex_block = '|'.join('(?P<%s>%s)' % pair
                                for pair in regex_block_specification)
@@ -140,6 +135,7 @@ class Page:
                 continue
 
             elif type_ == 'PROPERTY':
+                indent_level = indent_buffer
                 value = (matched.group('property_name'),
                          matched.group('property_value'))
             elif type_ == 'LIST':
@@ -155,14 +151,18 @@ class Page:
     def retrieve_children_blocks(text, with_confirm=False):
         """From tokenizer
         """
-        token_buffer = ''
+        # token_buffer = ''
         for token in Page.tokenizer(text):
             if with_confirm:
                 print(token)
                 input()
 
-            # List + Content_line
-            # Content_line could be either text or alias
+            # List block = List + Content_line
+
+            # get block lineages by their levels
+
+            # properties: level - applies to the page
+            #             level >= 1 applies the their corresponding blocks
 
     def get_related_pages(self):
         pass
@@ -177,6 +177,14 @@ class Page:
 
     def rename_as(self, filepath):
         pass
+
+
+class BlockToken(NamedTuple):
+    type_: str
+    value: str or (str, str) or list[(str, str)]
+    indent_level: int
+    span: Tuple[int, int]
+    # span: tuple[int, int]  # python 3.9
 
 
 class Block:
