@@ -5,6 +5,7 @@ from os import listdir
 from os.path import isfile, join
 from enum import Enum
 import re
+from typing import NamedTuple, Tuple
 
 PAGE_META_DEFAULT = ['title', 'alias']
 PAGE_FILE_EXTENSION = '.' + 'md'  # this is the only format allowed so far
@@ -72,24 +73,12 @@ class Page:
         self.properties = new_page.properties
 
     @staticmethod
-    def retrieve_properties(text: str) -> dict:
-        parsed_properties = []
+    def parse_front_matter(text: str):
+        regex_front_matter_syntax = r'(\w+): (.*)'
+        return re.findall(regex_front_matter_syntax, text)
 
-        # front matter: Start of the page, enclosed by two '---'s
-        # syntax is 'property-name: abc'
-        regex_front_matter = r'\A-{3}\n(.*\n)+-{3}'
-        parsed_front_matter = re.match(regex_front_matter, text).group(0)
-        if parsed_front_matter:
-            regex_front_matter_syntax = r'(\w+): (.*)'
-            parsed_properties += re.findall(regex_front_matter_syntax,
-                                            parsed_front_matter)
-
-        # inline: property-name followed by '""'.
-        regex_inline_syntax = r'(\w*):: (.*)'
-        parsed_inline = re.findall(regex_inline_syntax, text)
-        if parsed_inline:
-            parsed_properties += parsed_inline
-
+    @staticmethod
+    def parse_properties(parsed_properties: [tuple]) -> dict:
         property_dict = {}
         if parsed_properties:
             # turn [(key, values)] into a dictionary
@@ -108,57 +97,52 @@ class Page:
         return property_dict
 
     @staticmethod
-    def tokenize(text):
-        # TODO: improve above use tokenizer
-        # remove front matter
-        regex_front_matter = r'\A-{3}\n(.*\n)+-{3}\n+'
-        text_main = re.sub(regex_front_matter, '', text)
-
+    def tokenizer(text):
         regex_block_specification = [
-            ('LIST', r'- '),
+            ('FRONT_MATTER', r'\A-{3}\n(?P<front_matter>(.*\n)+)-{3}\n+'),
+            ('PROPERTY', r'(- )*(?P<name>\w+):: (?P<value>.*)'),
+            ('LIST', r'- '),  # TODO: use (?:...)
             ('LINE_BREAK', r'\n'),
-            ('INDENT', r'( {2}|\t)+'),
+            ('INDENT', r'\t'),
             ('CONTENT', r'.*'),
         ]
         regex_block = '|'.join('(?P<%s>%s)' % pair
                                for pair in regex_block_specification)
 
-        tokenized = []
-        for ind, matched in enumerate(re.finditer(regex_block, text_main)):
-            last_kind = matched.lastgroup
-            if last_kind == 'INDENT':
-                tokenized.append()
-            elif last_kind == 'LIST':
-                print(last_kind)
-            elif last_kind == 'LINE_BREAK':
-                print('\n')
-            elif last_kind == 'CONTENT':
-                print(last_kind)
-            else:
-                pass
+        indent_buffer = 0
+        for matched in re.finditer(regex_block, text):
+            kind = matched.lastgroup
+            value = matched.group()
+            indent_level = 0
+            # print(kind, indent_buffer)  # DEBUG
+
+            if kind == 'FRONT_MATTER':
+                value = Page.parse_front_matter(matched.group('front_matter'))
+            elif kind == 'INDENT':
+                indent_buffer += 1
+                continue
+            elif kind == 'LINE_BREAK':
+                indent_buffer = 0
+                continue
+            elif kind == 'PROPERTY':
+                value = (matched.group('name'), matched.group('value'))
+            elif kind == 'LIST':
+                indent_level = indent_buffer
+                value = matched.group()
+            elif kind == 'CONTENT':
+                indent_level = indent_buffer
+                value = matched.group().lstrip()
+
+            yield (BlockToken(kind, value, indent_level, matched.span()))
 
     @staticmethod
-    def get_children_blocks(text: str) -> list:
-        # remove front matter
-        regex_front_matter = r'\A-{3}\n(.*\n)+-{3}\n+'
-        text_main = re.sub(regex_front_matter, '', text)
-
-        regex_list_syntax = r'([ \t]*)- '
-        matched_all = re.finditer(regex_list_syntax, text_main)
-
-        # last_matched = next(matched_all)
-        # for matched in matched_all:
-        #     matched_marker = text_main[matched.start():matched.end()]
-        #     level = matched.end() - matched.start() - 1
-
-        last_match = next(matched_all)
-        while last_match is not None:
-            print(last_match)
-            matched_marker = text_main[last_match.start():last_match.end()]
-            level = last_match.end() - last_match.start() - 1
-            print(level)
-            print(matched_marker)
-            last_match = next(matched_all)
+    def retrieve_children_blocks(text, with_confirm=False):
+        """From tokenizer
+        """
+        for token in Page.tokenizer(text):
+            print(token)
+            if with_confirm:
+                input()
 
     def get_related_pages(self):
         pass
@@ -173,6 +157,14 @@ class Page:
 
     def rename_as(self, filepath):
         pass
+
+
+class BlockToken(NamedTuple):
+    kind: str
+    value: str or (str, str) or list[(str, str)]
+    indent_level: int
+    # span: tuple[int, int]  # python 3.9
+    span: Tuple[int, int]
 
 
 class Block:
