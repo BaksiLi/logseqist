@@ -3,12 +3,19 @@
 
 from os import listdir
 from os.path import isfile, join
-from enum import Enum
 import re
 from typing import NamedTuple, Tuple
 
-PAGE_META_DEFAULT = ['title', 'alias']
-PAGE_FILE_EXTENSION = '.' + 'md'  # this is the only format allowed so far
+LOGSEQ_FILE_FORMAT = 'md'  # this is the only format allowed so far
+PAGE_FILE_EXTENSION = '.' + LOGSEQ_FILE_FORMAT
+
+
+class BlockToken(NamedTuple):
+    type_: str
+    value: str or (str, str) or list[(str, str)]
+    indent_level: int
+    span: Tuple[int, int]
+    # span: tuple[int, int]  # python 3.9
 
 
 class Graph:
@@ -56,7 +63,7 @@ class Page:
         with open(file_path, 'r') as f:
             file_content = f.read()
 
-        properties = Page.retrieve_properties(file_content)
+        properties = Page.get_properties(file_content)
         title = properties.get(
             'title',
             file_path.rsplit('/', maxsplit=1)[-1].strip(PAGE_FILE_EXTENSION))
@@ -93,56 +100,69 @@ class Page:
                     ]
                     property_dict[key] = property_dict.get(key,
                                                            []) + value_list
-
         return property_dict
 
+    def get_properties(text):
+        pass
+
+
     @staticmethod
-    def tokenizer(text):
+    def tokenizer(text: str) -> Tuple[BlockToken]:
         regex_block_specification = [
             ('FRONT_MATTER', r'\A-{3}\n(?P<front_matter>(.*\n)+)-{3}\n+'),
-            ('PROPERTY', r'(- )*(?P<name>\w+):: (?P<value>.*)'),
-            ('LIST', r'- '),  # TODO: use (?:...)
-            ('LINE_BREAK', r'\n'),
             ('INDENT', r'\t'),
-            ('CONTENT', r'.*'),
+            ('LINE_BREAK', r'\n'),
+            ('PROPERTY',
+             r'(- )*(?P<property_name>\w+):: (?P<property_value>.*)'),
+            ('LIST', r'(- ?)(?P<list_line_value>.*)'),  # use (?:...)?
+            ('CONTENT_LINE', r'\s? ?(?P<content_line_value>.*)'),
         ]
         regex_block = '|'.join('(?P<%s>%s)' % pair
                                for pair in regex_block_specification)
 
         indent_buffer = 0
         for matched in re.finditer(regex_block, text):
-            kind = matched.lastgroup
+            type_ = matched.lastgroup
             value = matched.group()
-            indent_level = 0
-            # print(kind, indent_buffer)  # DEBUG
+            # print(type_, indent_buffer)  # DEBUG
 
-            if kind == 'FRONT_MATTER':
+            indent_level = 0
+
+            if type_ == 'FRONT_MATTER':
                 value = Page.parse_front_matter(matched.group('front_matter'))
-            elif kind == 'INDENT':
+
+            # This part deal with indent and line breaks
+            elif type_ == 'INDENT':
                 indent_buffer += 1
                 continue
-            elif kind == 'LINE_BREAK':
+            elif type_ == 'LINE_BREAK':
                 indent_buffer = 0
                 continue
-            elif kind == 'PROPERTY':
-                value = (matched.group('name'), matched.group('value'))
-            elif kind == 'LIST':
-                indent_level = indent_buffer
-                value = matched.group()
-            elif kind == 'CONTENT':
-                indent_level = indent_buffer
-                value = matched.group().lstrip()
 
-            yield (BlockToken(kind, value, indent_level, matched.span()))
+            elif type_ == 'PROPERTY':
+                value = (matched.group('property_name'),
+                         matched.group('property_value'))
+            elif type_ == 'LIST':
+                indent_level = indent_buffer
+                value = matched.group('list_line_value')
+            elif type_ == 'CONTENT_LINE':
+                indent_level = indent_buffer
+                value = matched.group('content_line_value')
+
+            yield (BlockToken(type_, value, indent_level, matched.span()))
 
     @staticmethod
     def retrieve_children_blocks(text, with_confirm=False):
         """From tokenizer
         """
+        token_buffer = ''
         for token in Page.tokenizer(text):
-            print(token)
             if with_confirm:
+                print(token)
                 input()
+
+            # List + Content_line
+            # Content_line could be either text or alias
 
     def get_related_pages(self):
         pass
@@ -159,20 +179,12 @@ class Page:
         pass
 
 
-class BlockToken(NamedTuple):
-    kind: str
-    value: str or (str, str) or list[(str, str)]
-    indent_level: int
-    # span: tuple[int, int]  # python 3.9
-    span: Tuple[int, int]
-
-
 class Block:
     """Block is the smallest addressable (thus linkable) unit.
        Each block can contain a child block.
     """
-    def __init__(self, content, properties: {}):
-        self.content = content
+    def __init__(self, type_, values, properties: {}):
+        self.values = values
         # metadata: uid, edit-time, edit-mail
 
     @property
